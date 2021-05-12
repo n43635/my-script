@@ -1,5 +1,6 @@
 import re
 import time
+import pymysql
 
 from selenium import webdriver
 import requests
@@ -23,7 +24,6 @@ executable_path = r"C:\Program Files\Google\Chrome\Application\chromedriver.exe"
 # 登录账户信息
 userName = 'n43635'
 passWord = 'mzfndln43635'
-
 
 options = webdriver.ChromeOptions()
 # 忽略证书错误
@@ -69,6 +69,31 @@ print('一共有' + pageNum + '页')
 nowTime = time.strftime("(%Y-%m-%d %H-%M-%S)", time.localtime()) 
 fileName = "EX" + nowTime + ".html" 
 
+def insertMysql(postList):
+
+    # 打开数据库连接
+    db = pymysql.connect(host='192.168.10.150', port=3306,
+            user='root', passwd='wwssaadd', db='astost', charset='utf8mb4')
+    
+    # 使用cursor()方法获取操作游标
+    cursor = db.cursor()
+    
+    # SQL 插入语句
+    sql = "INSERT INTO ex(id, name, url) VALUES (%s,%s,%s)"
+    
+    try:
+    # 执行sql语句
+        cursor.executemany(sql, postList)
+        # 提交到数据库执行
+        db.commit()
+    except :
+        # 如果发生错误则回滚
+        db.rollback()
+    # 关闭游标
+    cursor.close()
+    # 关闭数据库连接
+    db.close()
+
 # 遍历需要的数据并写入本地文件
 with open(fileName, 'a', encoding='utf-8') as f:
     f.write("<HTML><BODY>\n")
@@ -78,17 +103,21 @@ with open(fileName, 'a', encoding='utf-8') as f:
         exbrowser.get(nowNum)
         html = exbrowser.page_source
         getPostUrl = re.findall(r'id="a_ajax_(.*?</)', html)    # 从页面获取帖子需要的数据
-        postList = ''
+        htmlPostList = ''
+        listPostList = []
         # 遍历数据
         for i in getPostUrl:
             PostId = re.findall(r'(\d+)"', i)[0]    # 截取Id
             PostName = re.findall(r'>([^<>]*)</', i)[0]    # 截取帖子主题名
             PostUrl = "https://www.astost.com/bbs/read.php?tid=" + PostId    # url是通过id拼接成的
-            postList = postList + '<a href="' + PostUrl + '">' + PostName + '</a></br>\n'
-        f.write(postList)    # 重组当前页面的数据结构，并一次性写入到文件中
+            htmlPostList = htmlPostList + '<a href="' + PostUrl + '">' + PostName + '</a></br>\n'
+            listPostList.append((PostId, PostName, PostUrl))
+        f.write(htmlPostList)    # 重组当前页面的数据结构，并一次性写入到文件中
+        insertMysql(listPostList)
         print('第' + str(j+1) + '页抓取完成')
         time.sleep(refreshInterval)
     f.write("</BODY></HTML>")
     print('爬虫完成!')
 
-# browser.quit()
+exbrowser.quit()
+
